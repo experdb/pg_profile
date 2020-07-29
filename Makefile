@@ -4,7 +4,7 @@ DATA_built = pg_profile--$(PGPROFILE_VERSION).sql pg_profile.control
 
 REGRESS = pg_profile
 
-PG_CONFIG = /usr/local/pgsql/bin/pg_config
+PG_CONFIG = $(PGBIN)/pg_config
 
 ifdef USE_PGXS
 PG_CONFIG ?= pg_config

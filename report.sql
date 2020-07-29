@@ -8,8 +8,8 @@ DECLARE
     topn        integer;
     stmt_all_cnt    integer;
     -- HTML elements templates
-    report_tpl CONSTANT text := '<html><head><style>{css}</style><title>Postgres profile report {snaps}</title></head><body><H1>Postgres profile report {snaps}</H1>'||
-    '<p>pg_profile version: {pgprofile_version}</p>'||
+    report_tpl CONSTANT text := '<html><head><style>{css}</style><title>eXperDB profile report {snaps}</title></head><body><H1>eXperDB profile report {snaps}</H1>'||
+    '<p>experdb_profile version: {pgprofile_version}</p>'||
     '<p>Report interval: {report_start} - {report_end}</p>{report_description}{report}</body></html>';
     report_css CONSTANT text := 'table, th, td {border: 1px solid black; border-collapse: collapse; padding: 4px;} '||
     'table tr td.value, table tr td.mono {font-family: Monospace;} '||
