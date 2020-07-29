@@ -18,7 +18,7 @@ DECLARE
     'table tr:nth-child(even) {background-color: #eee;} '||
     'table tr:nth-child(odd) {background-color: #fff;} '||
     'table tr:hover td:not(.relhdr) {background-color:#d9ffcc} '||
-    'table th {color: black; background-color: #ffcc99;}'||
+    'table th {color: feffe8; background-color: #3e3e4c;}'||
     'table tr:target td {background-color: #EBEDFF;}'||
     'table tr:target td:first-of-type {font-weight: bold;}';
     description_tpl CONSTANT text := '<h2>Report description</h2><p>{description_text}</p>';
