@@ -1591,7 +1591,7 @@ BEGIN
         (dbcur.node_id = dblst.node_id AND dbcur.datid = dblst.datid AND dblst.snap_id = dbcur.snap_id - 1 AND dbcur.stats_reset = dblst.stats_reset)
       LEFT OUTER JOIN last_stat_indexes lst
         ON (lst.node_id = dblst.node_id AND lst.snap_id = dblst.snap_id AND lst.datid = dblst.datid AND lst.relid = cur.relid AND lst.indexrelid = cur.indexrelid AND cur.tablespaceid=lst.tablespaceid)
-    WHERE cur.snap_id = s_id
+    WHERE cur.snap_id = s_id AND cur.node_id = snode_id
     GROUP BY cur.node_id, cur.snap_id, cur.datid,cur.tablespaceid;
 
     -- User functions stats
@@ -1656,7 +1656,7 @@ BEGIN
         (dbcur.node_id = dblst.node_id AND dbcur.datid = dblst.datid AND dblst.snap_id = dbcur.snap_id - 1 AND dbcur.stats_reset = dblst.stats_reset)
       LEFT OUTER JOIN last_stat_user_functions lst ON
         (lst.node_id = dblst.node_id AND lst.snap_id = dblst.snap_id AND lst.datid = dblst.datid AND cur.funcid=lst.funcid)
-    WHERE cur.snap_id = s_id
+    WHERE cur.snap_id = s_id AND cur.node_id = snode_id
     GROUP BY cur.node_id, cur.snap_id, cur.datid;
 
     -- Clear data in last_ tables, holding data only for next diff snapshot
