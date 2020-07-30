@@ -11,16 +11,16 @@ DECLARE
     topn        integer;
     stmt_all_cnt    integer;
     -- HTML elements templates
-    report_tpl CONSTANT text := '<html><head><style>{css}</style><title>Postgres profile differential report {snaps}</title></head><body><H1>Postgres profile differential report {snaps}</H1><p>First interval (1): {i1_title}</p><p>Second interval (2): {i2_title}</p>{report_description}{report}</body></html>';
+    report_tpl CONSTANT text := '<html><head><style>{css}</style><title>eXperDB profile differential report {snaps}</title></head><body><H1>eXperDB profile differential report {snaps}</H1><p>First interval (1): {i1_title}</p><p>Second interval (2): {i2_title}</p>{report_description}{report}</body></html>';
     report_css CONSTANT text := 'table, th, td {border: 1px solid black; border-collapse: collapse; padding: 4px;} '||
     'table .value, table .mono {font-family: Monospace;} '||
-    '.int1 td:not(.hdr), td.int1 {background-color: #FFEEEE;} '||
-    '.int2 td:not(.hdr), td.int2 {background-color: #EEEEFF;} '||
+    '.int1 td:not(.hdr), td.int1 {background-color: #FFFFCC;} '||
+    '.int2 td:not(.hdr), td.int2 {background-color: #FFF;} '||
     'table.diff tr.int2 td {border-top: hidden;} '||
     'table tr:nth-child(even) {background-color: #eee;} '||
     'table tr:nth-child(odd) {background-color: #fff;} '||
     'table tr:hover td:not(.hdr) {background-color:#d9ffcc} '||
-    'table th {color: black; background-color: #ffcc99;}'||
+    'table th {color: feffe8; background-color: #3e3e4c;}'||
     '.label {color: grey;}'||
     'table tr:target td {background-color: #EBEDFF;}'||
     'table tr:target td:first-of-type {font-weight: bold;}'||
