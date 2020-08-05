@@ -291,7 +291,9 @@ BEGIN
       );
 
     -- collect pg_stat_statements stats if available
-    PERFORM collect_statements_stats(snode_id, s_id, topn);
+--    PERFORM collect_statements_stats(snode_id, s_id, topn);
+		-- to prevent pg_state_statements_reset 20200805
+    PERFORM collect_statements_stats_from_repo(snode_id, s_id, topn);
 
     -- pg_stat_bgwriter data
     IF pg_version::integer < 100000 THEN
@@ -846,6 +848,264 @@ BEGIN
 
     -- Flushing pg_stat_statements
     SELECT * INTO qres FROM dblink('node_connection','SELECT pg_stat_statements_reset()') AS t(res char(1));
+END;
+$$ LANGUAGE plpgsql;
+
+-- workarround 20200805
+CREATE OR REPLACE FUNCTION collect_statements_stats_from_repo(IN snode_id integer, IN s_id integer, IN topn integer) RETURNS void SET search_path=@extschema@,public AS $$
+DECLARE
+    qres record;
+	today varchar;
+	snap_time TIMESTAMP;
+	instanceid integer;
+	snap_now TIMESTAMP;
+BEGIN
+	today := (SELECT to_char(CURRENT_TIMESTAMP, 'YYYYMMDD'));
+	instanceid := (SELECT node_name::integer FROM nodes WHERE node_id = snode_id);
+	snap_time := (SELECT max(collect_dt) FROM TB_PG_STAT_STATEMENTS WHERE INSTANCE_ID = instanceid AND REG_DATE = today AND collect_dt < (SELECT snapshots.snap_time FROM SNAPSHOTS WHERE node_id = snode_id AND snap_id = (SELECT max(snapshots.snap_id)-1 FROM snapshots WHERE node_id = snode_id)));
+  snap_now := (SELECT MAX(COLLECT_DT) FROM TB_PG_STAT_STATEMENTS WHERE reg_date = today AND INSTANCE_ID = (1));
+  RAISE LOG '9999999999911[%]',snap_time ;
+	RAISE LOG '9999999999922[%]',snap_now ;
+    -- Snapshot data from pg_stat_statements for top whole cluster statements
+    FOR qres IN   
+WITH P AS (
+SELECT T.INSTANCE_ID, T.REG_DATE, T.COLLECT_DT,AA.* 
+	FROM TB_PG_STAT_STATEMENTS T
+	LEFT   JOIN LATERAL (
+		   SELECT 	elem->>'userid' AS USERID 
+					,elem->>'dbid'AS DBID 
+					,(elem->>'queryid')::int8 AS QUERYID
+					,(elem->>'cqueryid')::varchar AS CQUERYID
+  					,(elem->>'calls')::int8 AS CALLS
+					,(elem->>'total_time')::float8 AS TOTAL_TIME 
+					,(elem->>'min_time')::float8 AS MIN_TIME 
+					,(elem->>'max_time')::float8 AS MAX_TIME 
+					,(elem->>'mean_time')::float8 AS MEAN_TIME
+					,(elem->>'stddev_time')::float8 AS STDDEV_TIME
+					,(elem->>'rows')::int8 AS ROWS 
+					,(elem->>'shared_blks_hit')::int8 AS SHARED_BLKS_HIT
+					,(elem->>'shared_blks_read')::int8 AS SHARED_BLKS_READ 
+					,(elem->>'shared_blks_dirtied')::int8 AS SHARED_BLKS_DIRTIED
+					,(elem->>'shared_blks_written')::int8 AS SHARED_BLKS_WRITTEN
+					,(elem->>'local_blks_hit')::int8 AS LOCAL_BLKS_HIT 
+					,(elem->>'local_blks_read')::int8 AS LOCAL_BLKS_READ
+					,(elem->>'local_blks_dirtied')::int8 AS LOCAL_BLKS_DIRTIED 
+					,(elem->>'local_blks_written')::int8 AS LOCAL_BLKS_WRITTEN 
+					,(elem->>'temp_blks_read')::int8 AS TEMP_BLKS_READ 
+					,(elem->>'temp_blks_written')::int8 AS TEMP_BLKS_WRITTEN
+					,(elem->>'blk_read_time')::float8 AS BLK_READ_TIME
+					,(elem->>'blk_write_time')::float8 AS BLK_WRITE_TIME 
+		   FROM   JSONB_ARRAY_ELEMENTS(T.PGSS) A(ELEM)   
+	   ) AA ON TRUE                              -- PRESERVE ALL ROWS FROM T
+    WHERE COLLECT_DT = snap_time
+     AND REG_DATE = today
+	 AND T.INSTANCE_ID IN (instanceid)
+),
+C AS (
+	SELECT T.INSTANCE_ID, T.REG_DATE, T.COLLECT_DT,AA.* 
+		FROM TB_PG_STAT_STATEMENTS T
+		LEFT   JOIN LATERAL (
+			   SELECT 	elem->>'userid' AS USERID 
+						,elem->>'dbid'AS DBID 
+						,(elem->>'queryid')::int8 AS QUERYID
+						,(elem->>'cqueryid')::varchar AS CQUERYID
+	  ,(elem->>'calls')::int8 AS CALLS
+						,(elem->>'total_time')::float8 AS TOTAL_TIME 
+						,(elem->>'min_time')::float8 AS MIN_TIME 
+						,(elem->>'max_time')::float8 AS MAX_TIME 
+						,(elem->>'mean_time')::float8 AS MEAN_TIME
+						,(elem->>'stddev_time')::float8 AS STDDEV_TIME
+						,(elem->>'rows')::int8 AS ROWS 
+						,(elem->>'shared_blks_hit')::int8 AS SHARED_BLKS_HIT
+						,(elem->>'shared_blks_read')::int8 AS SHARED_BLKS_READ 
+						,(elem->>'shared_blks_dirtied')::int8 AS SHARED_BLKS_DIRTIED
+						,(elem->>'shared_blks_written')::int8 AS SHARED_BLKS_WRITTEN
+						,(elem->>'local_blks_hit')::int8 AS LOCAL_BLKS_HIT 
+						,(elem->>'local_blks_read')::int8 AS LOCAL_BLKS_READ
+						,(elem->>'local_blks_dirtied')::int8 AS LOCAL_BLKS_DIRTIED 
+						,(elem->>'local_blks_written')::int8 AS LOCAL_BLKS_WRITTEN 
+						,(elem->>'temp_blks_read')::int8 AS TEMP_BLKS_READ 
+						,(elem->>'temp_blks_written')::int8 AS TEMP_BLKS_WRITTEN
+						,(elem->>'blk_read_time')::float8 AS BLK_READ_TIME
+						,(elem->>'blk_write_time')::float8 AS BLK_WRITE_TIME 
+			   FROM   JSONB_ARRAY_ELEMENTS(T.PGSS) A(ELEM)   
+		   ) AA ON TRUE                              -- PRESERVE ALL ROWS FROM T
+	   WHERE COLLECT_DT = (SELECT MAX(COLLECT_DT) FROM TB_PG_STAT_STATEMENTS WHERE reg_date = today AND INSTANCE_ID = (instanceid))
+	     AND REG_DATE = today
+		 AND T.INSTANCE_ID IN (instanceid)
+		)
+        SELECT
+          snode_id AS snode_id,
+          s_id AS snap_id,
+          st.userid AS usernm,
+          st.dbid AS datnm,
+          UR.user_id AS userid,
+          DB.datid AS datid,
+          st.queryid AS queryid,
+          left(st.CQUERYID,10) AS queryid_md5,
+          COALESCE(st.calls,0)-COALESCE(P.calls,0) AS calls,
+          COALESCE(st.total_time,0)-COALESCE(P.total_time,0) AS total_time,
+          COALESCE(st.min_time,0)-COALESCE(P.min_time,0) AS min_time,
+          COALESCE(st.max_time,0)-COALESCE(P.max_time,0) AS max_time,
+          COALESCE(st.mean_time,0)-COALESCE(P.mean_time,0) AS mean_time,
+          COALESCE(st.stddev_time,0)-COALESCE(P.stddev_time,0) AS stddev_time,
+          COALESCE(st.rows,0) AS rows,
+          COALESCE(st.shared_blks_hit,0)-COALESCE(P.shared_blks_hit,0) AS shared_blks_hit,
+          COALESCE(st.shared_blks_read,0)-COALESCE(P.shared_blks_read,0) AS shared_blks_read,
+          COALESCE(st.shared_blks_dirtied,0)-COALESCE(P.shared_blks_dirtied,0) AS shared_blks_dirtied,
+          COALESCE(st.shared_blks_written,0)-COALESCE(P.shared_blks_written,0) AS shared_blks_written,
+          COALESCE(st.local_blks_hit,0)-COALESCE(P.local_blks_hit,0) AS local_blks_hit,
+          COALESCE(st.local_blks_read,0)-COALESCE(P.local_blks_read,0) AS local_blks_read,
+          COALESCE(st.local_blks_dirtied,0)-COALESCE(P.local_blks_dirtied,0) AS local_blks_dirtied,
+          COALESCE(st.local_blks_written,0)-COALESCE(P.local_blks_written,0) AS local_blks_written,
+          COALESCE(st.temp_blks_read,0)-COALESCE(P.temp_blks_read,0) AS temp_blks_read,
+          COALESCE(st.temp_blks_written,0)-COALESCE(P.temp_blks_written,0) AS temp_blks_written,
+          COALESCE(st.blk_read_time,0)-COALESCE(P.blk_read_time,0) AS blk_read_time,
+          COALESCE(st.blk_write_time,0)-COALESCE(P.blk_write_time,0) AS blk_write_time,
+          QI.QUERY
+		FROM C AS ST LEFT OUTER JOIN P ON ST.USERID = P.USERID AND ST.DBID = P.DBID AND ST.QUERYID = P.QUERYID
+		JOIN TB_DATABASE_INFO DB ON db.instance_id = (instanceid) AND db.DATABASE_NAME = ST.dbid 
+		JOIN TB_USER_INFO UR ON UR.instance_id = (instanceid) AND UR.USER_NAME = ST.userid
+		JOIN 
+			(SELECT      C.USERID, C.DBID, C.CQUERYID as q_md5,
+            row_number() over (ORDER BY sum(C.total_time-COALESCE(P.total_time,0)) DESC) AS time_rank,
+            row_number() over (ORDER BY sum(C.calls-COALESCE(P.calls,0)) DESC) AS calls_rank,
+            row_number() over (ORDER BY sum(C.blk_read_time-COALESCE(P.blk_read_time,0) + C.blk_write_time-COALESCE(P.blk_write_time,0)) DESC) AS io_time_rank,
+            row_number() over (ORDER BY sum(C.shared_blks_hit-COALESCE(P.shared_blks_hit,0) + C.shared_blks_read-COALESCE(P.shared_blks_read,0)) DESC) AS gets_rank,
+            row_number() over (ORDER BY sum(C.shared_blks_read-COALESCE(P.shared_blks_read,0)) DESC) AS read_rank,
+            row_number() over (ORDER BY sum(C.shared_blks_dirtied-COALESCE(P.shared_blks_dirtied,0)) DESC) AS dirtied_rank,
+            row_number() over (ORDER BY sum(C.shared_blks_written-COALESCE(P.shared_blks_written,0)) DESC) AS written_rank,
+            row_number() over (ORDER BY sum(C.temp_blks_written-COALESCE(P.temp_blks_written,0) + C.local_blks_written-COALESCE(P.local_blks_written,0)) DESC) AS tempw_rank,
+            row_number() over (ORDER BY sum(C.temp_blks_read-COALESCE(P.temp_blks_read,0) + C.local_blks_read-COALESCE(P.local_blks_read,0)) DESC) AS tempr_rank
+			FROM C LEFT OUTER JOIN P ON C.USERID = P.USERID AND C.DBID = P.DBID AND C.QUERYID = P.QUERYID
+			GROUP BY C.USERID, C.DBID, C.CQUERYID) rank_t
+		ON (st.userid=rank_t.userid AND st.dbid=rank_t.dbid AND st.CQUERYID=rank_t.q_md5)
+		JOIN snap_stat_database sd ON (db.datid = sd.datid AND sd.snap_id = s_id AND sd.node_id = snode_id)
+		LEFT OUTER JOIN TB_PGSS_QUERY_INFO QI ON (qi.INSTANCE_ID = (instanceid) AND qi.QUERYID = st.CQUERYID)
+        WHERE st.queryid IS NOT NULL
+          AND least (time_rank, calls_rank, io_time_rank, gets_rank, read_rank, tempw_rank, tempr_rank, dirtied_rank, written_rank) <= topn
+    LOOP
+	INSERT INTO stmt_list VALUES (qres.queryid_md5,qres.query) ON CONFLICT(queryid_md5) DO UPDATE SET query = qres.query WHERE stmt_list.queryid_md5 = qres.queryid_md5;
+        INSERT INTO snap_statements VALUES (
+            qres.snode_id,
+            qres.snap_id,
+            qres.userid,
+            qres.datid,
+            qres.queryid,
+            qres.queryid_md5,
+            qres.calls,
+            qres.total_time,
+            qres.min_time,
+            qres.max_time,
+            qres.mean_time,
+            qres.stddev_time,
+            qres.rows,
+            qres.shared_blks_hit,
+            qres.shared_blks_read,
+            qres.shared_blks_dirtied,
+            qres.shared_blks_written,
+            qres.local_blks_hit,
+            qres.local_blks_read,
+            qres.local_blks_dirtied,
+            qres.local_blks_written,
+            qres.temp_blks_read,
+            qres.temp_blks_written,
+            qres.blk_read_time,
+            qres.blk_write_time
+        );
+    END LOOP;
+    -- Aggregeted statistics data
+    INSERT INTO snap_statements_total
+    WITH P AS (
+	SELECT T.INSTANCE_ID, T.REG_DATE, T.COLLECT_DT,AA.* 
+		FROM TB_PG_STAT_STATEMENTS T
+		LEFT   JOIN LATERAL (
+			   SELECT 	elem->>'userid' AS USERID 
+						,elem->>'dbid'AS DBID 
+						,(elem->>'queryid')::int8 AS QUERYID
+						,(elem->>'cqueryid')::varchar AS CQUERYID
+	  					,(elem->>'calls')::int8 AS CALLS
+						,(elem->>'total_time')::float8 AS TOTAL_TIME 
+						,(elem->>'min_time')::float8 AS MIN_TIME 
+						,(elem->>'max_time')::float8 AS MAX_TIME 
+						,(elem->>'mean_time')::float8 AS MEAN_TIME
+						,(elem->>'stddev_time')::float8 AS STDDEV_TIME
+						,(elem->>'rows')::int8 AS ROWS 
+						,(elem->>'shared_blks_hit')::int8 AS SHARED_BLKS_HIT
+						,(elem->>'shared_blks_read')::int8 AS SHARED_BLKS_READ 
+						,(elem->>'shared_blks_dirtied')::int8 AS SHARED_BLKS_DIRTIED
+						,(elem->>'shared_blks_written')::int8 AS SHARED_BLKS_WRITTEN
+						,(elem->>'local_blks_hit')::int8 AS LOCAL_BLKS_HIT 
+						,(elem->>'local_blks_read')::int8 AS LOCAL_BLKS_READ
+						,(elem->>'local_blks_dirtied')::int8 AS LOCAL_BLKS_DIRTIED 
+						,(elem->>'local_blks_written')::int8 AS LOCAL_BLKS_WRITTEN 
+						,(elem->>'temp_blks_read')::int8 AS TEMP_BLKS_READ 
+						,(elem->>'temp_blks_written')::int8 AS TEMP_BLKS_WRITTEN
+						,(elem->>'blk_read_time')::float8 AS BLK_READ_TIME
+						,(elem->>'blk_write_time')::float8 AS BLK_WRITE_TIME 
+			   FROM   JSONB_ARRAY_ELEMENTS(T.PGSS) A(ELEM)   
+		   ) AA ON TRUE                              -- PRESERVE ALL ROWS FROM T
+	    WHERE COLLECT_DT = snap_time
+	     AND REG_DATE = today
+		 AND T.INSTANCE_ID IN (instanceid)
+	),
+	C AS (
+		SELECT T.INSTANCE_ID, T.REG_DATE, T.COLLECT_DT,AA.* 
+			FROM TB_PG_STAT_STATEMENTS T
+			LEFT   JOIN LATERAL (
+				   SELECT 	elem->>'userid' AS USERID 
+							,elem->>'dbid'AS DBID 
+							,(elem->>'queryid')::int8 AS QUERYID
+							,(elem->>'cqueryid')::varchar AS CQUERYID
+		 					,(elem->>'calls')::int8 AS CALLS
+							,(elem->>'total_time')::float8 AS TOTAL_TIME 
+							,(elem->>'min_time')::float8 AS MIN_TIME 
+							,(elem->>'max_time')::float8 AS MAX_TIME 
+							,(elem->>'mean_time')::float8 AS MEAN_TIME
+							,(elem->>'stddev_time')::float8 AS STDDEV_TIME
+							,(elem->>'rows')::int8 AS ROWS 
+							,(elem->>'shared_blks_hit')::int8 AS SHARED_BLKS_HIT
+							,(elem->>'shared_blks_read')::int8 AS SHARED_BLKS_READ 
+							,(elem->>'shared_blks_dirtied')::int8 AS SHARED_BLKS_DIRTIED
+							,(elem->>'shared_blks_written')::int8 AS SHARED_BLKS_WRITTEN
+							,(elem->>'local_blks_hit')::int8 AS LOCAL_BLKS_HIT 
+							,(elem->>'local_blks_read')::int8 AS LOCAL_BLKS_READ
+							,(elem->>'local_blks_dirtied')::int8 AS LOCAL_BLKS_DIRTIED 
+							,(elem->>'local_blks_written')::int8 AS LOCAL_BLKS_WRITTEN 
+							,(elem->>'temp_blks_read')::int8 AS TEMP_BLKS_READ 
+							,(elem->>'temp_blks_written')::int8 AS TEMP_BLKS_WRITTEN
+							,(elem->>'blk_read_time')::float8 AS BLK_READ_TIME
+							,(elem->>'blk_write_time')::float8 AS BLK_WRITE_TIME 
+				   FROM   JSONB_ARRAY_ELEMENTS(T.PGSS) A(ELEM)   
+			   ) AA ON TRUE                              -- PRESERVE ALL ROWS FROM T
+		   WHERE COLLECT_DT = (SELECT MAX(COLLECT_DT) FROM TB_PG_STAT_STATEMENTS WHERE reg_date = today AND INSTANCE_ID = (instanceid))
+		     AND REG_DATE = today
+			 AND T.INSTANCE_ID IN (instanceid)
+	)
+	SELECT sd.node_id, sd.snap_id, DB.datid as datid,
+		sum(C.calls)-COALESCE(sum(P.calls),0),
+		sum(C.total_time-COALESCE(P.total_time,0)),
+		sum(C.rows),
+		sum(C.shared_blks_hit-COALESCE(P.shared_blks_hit,0)),
+        sum(C.shared_blks_read-COALESCE(P.shared_blks_read,0)),
+        sum(C.shared_blks_dirtied-COALESCE(P.shared_blks_dirtied,0)),
+        sum(C.shared_blks_written-COALESCE(P.shared_blks_written,0)),
+        sum(C.local_blks_hit-COALESCE(P.local_blks_hit,0)),
+        sum(C.local_blks_read-COALESCE(P.local_blks_read,0)),
+        sum(C.local_blks_dirtied-COALESCE(P.local_blks_dirtied,0)),
+        sum(C.local_blks_written-COALESCE(P.local_blks_written,0)),
+        sum(C.temp_blks_read-COALESCE(P.temp_blks_read,0)),
+        sum(C.temp_blks_written-COALESCE(P.temp_blks_written,0)),
+        sum(C.blk_read_time-COALESCE(P.blk_read_time,0)),
+        sum(C.blk_write_time-COALESCE(P.blk_write_time,0)),
+        count(C.*)
+    FROM C LEFT OUTER JOIN P ON C.USERID = P.USERID AND C.DBID = P.DBID AND C.QUERYID = P.QUERYID
+    JOIN TB_DATABASE_INFO DB ON db.instance_id = (instanceid) AND db.DATABASE_NAME = C.dbid
+    JOIN snap_stat_database sd USING (datid)
+    WHERE sd.snap_id = s_id AND sd.node_id = snode_id
+    GROUP BY sd.node_id, sd.snap_id, DB.datid;
+    -- Flushing pg_stat_statements
+    --SELECT * INTO qres FROM dblink('node_connection','SELECT pg_stat_statements_reset()') AS t(res char(1));
 END;
 $$ LANGUAGE plpgsql;
 

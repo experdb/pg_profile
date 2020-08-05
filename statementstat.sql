@@ -78,8 +78,11 @@ RETURNS TABLE(
         sum(st.total_time*100/tot.total_time) as total_time_pct,
         min(st.min_time) as min_time,
         max(st.max_time) as max_time,
-        sum(st.mean_time*st.calls)/sum(st.calls) as mean_time,
-        sqrt(sum((power(st.stddev_time,2)+power(st.mean_time,2))*st.calls)/sum(st.calls)-power(sum(st.mean_time*st.calls)/sum(st.calls),2)) as stddev_time,
+        --sum(st.mean_time*st.calls)/sum(st.calls) as mean_time,
+        --sqrt(sum((power(st.stddev_time,2)+power(st.mean_time,2))*st.calls)/sum(st.calls)-power(sum(st.mean_time*st.calls)/sum(st.calls),2)) as stddev_time,
+        --fix zero division
+        sum(st.mean_time*st.calls)/GREATEST(sum(st.calls),1) as mean_time,
+        sqrt(sum((power(st.stddev_time,2)+power(st.mean_time,2))*st.calls)/GREATEST(sum(st.calls),1)-power(sum(st.mean_time*st.calls)/GREATEST(sum(st.calls),1),2)) as stddev_time,
         sum(st.rows)::bigint as rows,
         sum(st.shared_blks_hit)::bigint as shared_blks_hit,
         (sum(st.shared_blks_hit) * 100 / min(tot.shared_blks_hit))::float as hit_pct,
