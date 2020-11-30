@@ -50,7 +50,7 @@ CREATE OR REPLACE FUNCTION baseline_keep(IN node name, IN name varchar(25) = nul
 DECLARE
     upd_rows integer;
 BEGIN
-    UPDATE baselines SET keep_until = now() + (days || ' days')::interval WHERE (name IS NULL OR bl_name = name) AND node_id IN (SELECT node_id FROM nodes WHERE node_name = node);
+    UPDATE baselines SET keep_until = current_date + '23:59:59'::time + (days || ' days')::interval WHERE (name IS NULL OR bl_name = name) AND node_id IN (SELECT node_id FROM nodes WHERE node_name = node);
     GET DIAGNOSTICS upd_rows = ROW_COUNT;
     RETURN upd_rows;
 END;
