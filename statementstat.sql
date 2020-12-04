@@ -965,7 +965,7 @@ DECLARE
         st.calls
     FROM top_statements(snode_id, start_id, end_id) st
     WHERE st.shared_blks_dirtied > 0
-    ORDER BY st.shared_blks_dirtied DESC
+    ORDER BY st.shared_blks_written DESC
     LIMIT topn;
 
     r_result RECORD;
