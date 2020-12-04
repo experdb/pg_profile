@@ -554,11 +554,18 @@ BEGIN
     );
 
     -- Delete unused indexes from indexes list
+    --DELETE FROM indexes_list
+    --WHERE node_id = snode_id
+    --  AND(node_id, datid, indexrelid) NOT IN (
+    --    SELECT node_id, datid, indexrelid FROM snap_stat_indexes
+    --);
+    -- tunning 20201204
     DELETE FROM indexes_list
-    WHERE node_id = snode_id
-      AND(node_id, datid, indexrelid) NOT IN (
-        SELECT node_id, datid, indexrelid FROM snap_stat_indexes
-    );
+    WHERE (node_id, datid, indexrelid) IN (
+      SELECT A.node_id, A.datid, A.indexrelid FROM indexes_list A LEFT OUTER JOIN snap_stat_indexes B using(node_id, datid, indexrelid)
+      WHERE A.node_id = 4
+        AND B.node_id IS null
+)
 
     -- Delete unused tables from tables list
     WITH used_tables AS (
