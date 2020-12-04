@@ -563,7 +563,7 @@ BEGIN
     DELETE FROM indexes_list
     WHERE (node_id, datid, indexrelid) IN (
       SELECT A.node_id, A.datid, A.indexrelid FROM indexes_list A LEFT OUTER JOIN snap_stat_indexes B using(node_id, datid, indexrelid)
-      WHERE A.node_id = 4
+      WHERE A.node_id = snode_id
         AND B.node_id IS null
     );
 
