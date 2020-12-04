@@ -565,7 +565,7 @@ BEGIN
       SELECT A.node_id, A.datid, A.indexrelid FROM indexes_list A LEFT OUTER JOIN snap_stat_indexes B using(node_id, datid, indexrelid)
       WHERE A.node_id = 4
         AND B.node_id IS null
-)
+    );
 
     -- Delete unused tables from tables list
     WITH used_tables AS (
